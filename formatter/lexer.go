@@ -17,6 +17,7 @@ const (
 	TkCommentSameLine
 	TkCommentNewLine
 	TkEmptyLine
+	TkNoType
 )
 
 type Token = struct {
@@ -39,7 +40,7 @@ func TokenTypeToStr(tkType TokenType) string {
 	case TkCommentNewLine:
 		return "TkCommentNewLine"
 	case TkEmptyLine:
-		return "TlEmptyLine"
+		return "TkEmptyLine"
 	}
 
 	return "type not added"
@@ -65,73 +66,121 @@ func Tokenize(file *os.File) *[]Token {
 	return &tokens
 }
 
-func appendTokens(tokens *[]Token, tk Token, addComma bool) {
+func addToken(tokens *[]Token, tkType TokenType, tkValue string) {
+	tk := Token{TkType: tkType, TkValue: tkValue}
 	*tokens = append(*tokens, tk)
+}
 
-	if addComma {
-		*tokens = append(*tokens, Token{TkType: TkComma, TkValue: ","})
+func handleComment(tokens *[]Token, line string, index int) {
+	if index >= len(line) {
+		panic("index greater than line lenght in trimComment")
 	}
+
+	tkType := TkCommentSameLine
+
+	if len(*tokens) == 0 {
+		tkType = TkCommentNewLine
+	}
+
+	tkValue := strings.Join(strings.Fields(line[index:]), " ")
+	addToken(tokens, tkType, tkValue)
+}
+
+var (
+	whitespaceChars = [256]bool{
+		' ':  true,
+		'\t': true,
+		'\n': true,
+	}
+
+	specialChars = [256]bool{
+		',': true,
+		':': true,
+	}
+)
+
+func isWhitespaceChar(ch byte) bool {
+	return int(ch) < len(whitespaceChars) && whitespaceChars[ch]
+}
+
+func isSpecialChar(ch byte) bool {
+	return int(ch) < len(specialChars) && specialChars[ch]
+}
+
+func flushPendingToken(
+	tokens *[]Token,
+	bufValue *[]byte,
+	pendingType *TokenType,
+	instructionFound, addComma *bool) {
+
+	if len(*bufValue) != 0 {
+		if !*instructionFound && *pendingType == TkOperand {
+			*pendingType = TkInstruction
+			*instructionFound = true
+		}
+		addToken(tokens, *pendingType, string(*bufValue))
+	}
+
+	if *addComma {
+		addToken(tokens, TkComma, ",")
+		*addComma = false
+	}
+
+	*bufValue = (*bufValue)[:0]
+	*pendingType = TkNoType
 }
 
 func tokenizeLine(tokens *[]Token, line string) {
 	if len(line) == 0 {
-		tk := Token{TkType: TkEmptyLine, TkValue: "\\n"}
-		appendTokens(tokens, tk, false)
+		addToken(tokens, TkEmptyLine, "\\n")
 		return
 	}
 
-	const breakChars = " \t\n,:"
-	const specialChars = ",:"
-	buf := make([]byte, 0, len(line))
-	instructionFound := false
+	bufValue := make([]byte, 0, len(line))
 
-	shouldAddToken := false
-	specialChar := ' '
+	instructionFound := false
+	addComma := false
+	pendingType := TkNoType
 
 	for i := 0; i < len(line); i++ {
-		if strings.ContainsRune(breakChars, rune(line[i])) {
-			if strings.ContainsRune(specialChars, rune(line[i])) {
-				specialChar = rune(line[i])
+		ch := line[i]
+
+		switch {
+		case ch == ';':
+			flushPendingToken(tokens, &bufValue, &pendingType, &instructionFound, &addComma)
+			handleComment(tokens, line, i)
+			return
+		case isWhitespaceChar(ch):
+			if len(bufValue) != 0 {
+				pendingType = TkOperand
+			}
+		case isSpecialChar(ch):
+			if len(bufValue) != 0 {
+				pendingType = TkOperand
 			}
 
-			shouldAddToken = true
-
-			if i != len(line)-1 {
-				continue
+			switch ch {
+			case ':':
+				pendingType = TkLabel
+			case ',':
+				addComma = true
 			}
-		} else if i == len(line)-1 {
-			buf = append(buf, line[i])
-			shouldAddToken = true
+		case pendingType != TkNoType && len(bufValue) != 0:
+			flushPendingToken(tokens, &bufValue, &pendingType, &instructionFound, &addComma)
+			fallthrough
+		default:
+			bufValue = append(bufValue, ch)
+		}
+	}
+
+	if len(bufValue) != 0 {
+		if pendingType == TkNoType {
+			pendingType = TkOperand
 		}
 
-		if len(buf) == 0 {
-			shouldAddToken = false
+		addToken(tokens, pendingType, string(bufValue))
+		if addComma {
+			addToken(tokens, TkComma, ",")
 		}
-
-		if shouldAddToken {
-			shouldAddToken = false
-
-			tkType := TkOperand
-
-			if specialChar == ':' {
-				tkType = TkLabel
-			} else if !instructionFound {
-				tkType = TkInstruction
-				instructionFound = true
-			}
-
-			tk := Token{TkType: tkType, TkValue: string(buf)}
-			*tokens = append(*tokens, tk)
-
-			if specialChar == ',' {
-				tk := Token{TkType: TkComma, TkValue: ","}
-				*tokens = append(*tokens, tk)
-			}
-
-			buf = buf[:0]
-			specialChar = ' '
-		}
-
-		buf = append(buf, line[i])
 	}
 }

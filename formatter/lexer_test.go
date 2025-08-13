@@ -103,3 +103,62 @@ func TestLabelsAndInstructions(t *testing.T) {
 		t.Error("Tokens are not matching")
 	}
 }
+
+func TestWithComments(t *testing.T) {
+	expected_tokens := []formatter.Token{
+		{TkType: formatter.TkCommentNewLine, TkValue: "; Start label"},
+
+		{TkType: formatter.TkLabel, TkValue: "_start"},
+
+		{TkType: formatter.TkInstruction, TkValue: "extern"},
+		{TkType: formatter.TkOperand, TkValue: "page_directory"},
+		{TkType: formatter.TkCommentSameLine, TkValue: "; An extern variable"},
+
+		{TkType: formatter.TkInstruction, TkValue: "mov"},
+		{TkType: formatter.TkOperand, TkValue: "eax"},
+		{TkType: formatter.TkComma, TkValue: ","},
+		{TkType: formatter.TkOperand, TkValue: "page_directory"},
+
+		{TkType: formatter.TkInstruction, TkValue: "mov"},
+		{TkType: formatter.TkOperand, TkValue: "cr3"},
+		{TkType: formatter.TkComma, TkValue: ","},
+		{TkType: formatter.TkOperand, TkValue: "eax"},
+
+		{TkType: formatter.TkEmptyLine, TkValue: "\\n"},
+
+		{TkType: formatter.TkInstruction, TkValue: "mov"},
+		{TkType: formatter.TkOperand, TkValue: "eax"},
+		{TkType: formatter.TkComma, TkValue: ","},
+		{TkType: formatter.TkOperand, TkValue: "cr0"},
+
+		{TkType: formatter.TkInstruction, TkValue: "or"},
+		{TkType: formatter.TkOperand, TkValue: "eax"},
+		{TkType: formatter.TkComma, TkValue: ","},
+		{TkType: formatter.TkOperand, TkValue: "0x80000001"},
+
+		{TkType: formatter.TkInstruction, TkValue: "mov"},
+		{TkType: formatter.TkOperand, TkValue: "cr0"},
+		{TkType: formatter.TkComma, TkValue: ","},
+		{TkType: formatter.TkOperand, TkValue: "eax"},
+	}
+
+	t.Log("Testing examples/with_comments.asm ...")
+
+	file, err := os.Open("../examples/with_comments.asm")
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	defer file.Close()
+
+	tokens := formatter.Tokenize(file)
+
+	if !reflect.DeepEqual(tokens, &expected_tokens) {
+		formatter.PrintTokens(&expected_tokens)
+		fmt.Println()
+		formatter.PrintTokens(tokens)
+
+		t.Error("Tokens are not matching")
+	}
+}
