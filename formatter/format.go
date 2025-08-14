@@ -78,18 +78,21 @@ func generateFromTokens(tokens []Token, opts FormatOpts) string {
 	}
 
 	buf := make([]byte, 0, len(tokens)*5)
-	tabLevel := 0
+	indentLevel := 0
 	instructionLen := 0
+	dontAddSpaceInFrontOfOperand := false
 
 	for _, tk := range tokens {
 		switch tk.TkType {
 		case TkLabel:
-			bufAddChr(&buf, '\n')
-			bufAddStr(&buf, tk.TkValue, ":")
-			tabLevel = 1
+			bufAddStr(&buf, "\n", tk.TkValue, ":")
+			indentLevel = 1
+		case TkBracketedDirective:
+			bufAddStr(&buf, "\n[", tk.TkValue, "]")
+			indentLevel = 0
 		case TkInstruction:
 			bufAddChr(&buf, '\n')
-			bufAddTab(&buf, tabLevel, &opts)
+			bufAddTab(&buf, indentLevel, &opts)
 			bufAddStr(&buf, tk.TkValue)
 			instructionLen = len(tk.TkValue)
 		case TkOperand:
@@ -97,15 +100,22 @@ func generateFromTokens(tokens []Token, opts FormatOpts) string {
 				bufAddWhitespaces(&buf, opts.OperandAlignDist-instructionLen)
 				instructionLen = 0
 			}
-			bufAddChr(&buf, ' ')
+			if dontAddSpaceInFrontOfOperand {
+				dontAddSpaceInFrontOfOperand = false
+			} else {
+				bufAddChr(&buf, ' ')
+			}
 			bufAddStr(&buf, tk.TkValue)
 		case TkComma:
 			bufAddChr(&buf, ',')
+		case TkColon:
+			bufAddChr(&buf, ':')
+			dontAddSpaceInFrontOfOperand = true
 		case TkCommentSameLine:
 			bufAddStr(&buf, " ; ", tk.TkValue)
 		case TkCommentNewLine:
 			bufAddChr(&buf, '\n')
-			bufAddTab(&buf, tabLevel, &opts)
+			bufAddTab(&buf, indentLevel, &opts)
 			bufAddStr(&buf, "; ", tk.TkValue)
 		case TkEmptyLine:
 			bufAddChr(&buf, '\n')

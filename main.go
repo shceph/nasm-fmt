@@ -13,8 +13,14 @@ func main() {
 		log.Fatal("No file provided. Aborting...")
 	}
 
-	// tokens := formatter.Tokenize(file)
+	// tokens, err := formatter.Tokenize(os.Args[1])
+
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
 	// formatter.PrintTokens(tokens)
+	// fmt.Print()
 
 	output, err := formatter.Format(os.Args[1], formatter.DefaultFormatOpts)
 

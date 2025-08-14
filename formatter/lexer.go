@@ -11,9 +11,11 @@ type TokenType int
 
 const (
 	TkLabel TokenType = iota
+	TkBracketedDirective
 	TkInstruction
 	TkOperand
 	TkComma
+	TkColon
 	TkCommentSameLine
 	TkCommentNewLine
 	TkEmptyLine
@@ -29,12 +31,16 @@ func TokenTypeToStr(tkType TokenType) string {
 	switch tkType {
 	case TkLabel:
 		return "TkLabel"
+	case TkBracketedDirective:
+		return "TkBracketedDirective"
 	case TkInstruction:
 		return "TkInstruction"
 	case TkOperand:
 		return "TkOperand"
 	case TkComma:
 		return "TkComma"
+	case TkColon:
+		return "TkColon"
 	case TkCommentSameLine:
 		return "TkCommentSameLine"
 	case TkCommentNewLine:
@@ -83,15 +89,9 @@ func addToken(tokens *[]Token, tkType TokenType, tkValue string) {
 	*tokens = append(*tokens, tk)
 }
 
-func handleComment(tokens *[]Token, line string, index int) {
+func handleComment(tokens *[]Token, commentType TokenType, line string, index int) {
 	if index >= len(line) {
 		panic("index greater than line lenght in trimComment")
-	}
-
-	tkType := TkCommentSameLine
-
-	if len(*tokens) == 0 {
-		tkType = TkCommentNewLine
 	}
 
 	// line[index] is ';', we don't want that included in value
@@ -106,7 +106,19 @@ func handleComment(tokens *[]Token, line string, index int) {
 		tkValue = strings.Join(strings.Fields(line[index:]), " ")
 	}
 
-	addToken(tokens, tkType, tkValue)
+	addToken(tokens, commentType, tkValue)
+}
+
+func handleBracketedDirective(tokens *[]Token, index int, line string) int {
+	buf := make([]byte, 0, len(line))
+
+	i := 0
+	for i = index + 1; line[i] != ']' && i < len(line); i++ {
+		buf = append(buf, line[i])
+	}
+
+	addToken(tokens, TkBracketedDirective, string(buf))
+	return i
 }
 
 var (
@@ -170,9 +182,16 @@ func tokenizeLine(tokens *[]Token, line string) {
 
 		switch {
 		case ch == ';':
+			commentType := TkCommentSameLine
+			if len(bufValue) == 0 {
+				commentType = TkCommentNewLine
+			}
+
 			flushPendingToken(tokens, &bufValue, &pendingType, &instructionFound, &addComma)
-			handleComment(tokens, line, i)
+			handleComment(tokens, commentType, line, i)
 			return
+		case ch == '[' && !instructionFound:
+			i = handleBracketedDirective(tokens, i, line)
 		case isWhitespaceChar(ch):
 			if len(bufValue) != 0 {
 				pendingType = TkOperand
@@ -184,7 +203,12 @@ func tokenizeLine(tokens *[]Token, line string) {
 
 			switch ch {
 			case ':':
-				pendingType = TkLabel
+				if !instructionFound {
+					pendingType = TkLabel
+				} else {
+					flushPendingToken(tokens, &bufValue, &pendingType, &instructionFound, &addComma)
+					addToken(tokens, TkColon, ":")
+				}
 			case ',':
 				addComma = true
 			}
