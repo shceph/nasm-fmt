@@ -46,14 +46,26 @@ func TokenTypeToStr(tkType TokenType) string {
 	return "type not added"
 }
 
-func PrintTokens(tokens *[]Token) {
-	for _, tk := range *tokens {
+func PrintTokens(tokens []Token) {
+	for _, tk := range tokens {
 		const formatStr string = "type: %-20v =====          value: %v\n"
 		fmt.Printf(formatStr, TokenTypeToStr(tk.TkType), tk.TkValue)
 	}
 }
 
-func Tokenize(file *os.File) *[]Token {
+func Tokenize(filePath string) ([]Token, error) {
+	file, err := os.Open(filePath)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		if err := file.Close(); err != nil {
+			panic(err)
+		}
+	}()
+
 	const tokensCapacity int = 1024
 	tokens := make([]Token, 0, tokensCapacity)
 	scanner := bufio.NewScanner(file)
@@ -63,7 +75,7 @@ func Tokenize(file *os.File) *[]Token {
 		tokenizeLine(&tokens, line)
 	}
 
-	return &tokens
+	return tokens, nil
 }
 
 func addToken(tokens *[]Token, tkType TokenType, tkValue string) {
@@ -82,7 +94,18 @@ func handleComment(tokens *[]Token, line string, index int) {
 		tkType = TkCommentNewLine
 	}
 
-	tkValue := strings.Join(strings.Fields(line[index:]), " ")
+	// line[index] is ';', we don't want that included in value
+	index++
+	tkValue := ""
+
+	if index < len(line) && line[index] == ' ' {
+		index++
+	}
+
+	if index < len(line) {
+		tkValue = strings.Join(strings.Fields(line[index:]), " ")
+	}
+
 	addToken(tokens, tkType, tkValue)
 }
 

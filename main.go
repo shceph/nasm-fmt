@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/shceph/nasm-fmt/formatter"
@@ -9,16 +10,17 @@ import (
 
 func main() {
 	if len(os.Args) <= 1 {
-		fmt.Println("No file provided. Aborting...")
-		return
+		log.Fatal("No file provided. Aborting...")
 	}
 
-	file, err := os.Open(os.Args[1])
+	// tokens := formatter.Tokenize(file)
+	// formatter.PrintTokens(tokens)
+
+	output, err := formatter.Format(os.Args[1], formatter.DefaultFormatOpts)
 
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
-	tokens := formatter.Tokenize(file)
-	formatter.PrintTokens(tokens)
+	fmt.Println(output)
 }

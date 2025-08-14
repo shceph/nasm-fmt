@@ -2,7 +2,6 @@ package formatter_test
 
 import (
 	"fmt"
-	"os"
 	"reflect"
 	"testing"
 
@@ -29,18 +28,14 @@ func TestOnlyBasicInstructions(t *testing.T) {
 
 	t.Log("Testing examples/just_instructions.asm ...")
 
-	file, err := os.Open("../examples/just_instructions.asm")
+	tokens, err := formatter.Tokenize("../examples/just_instructions.asm")
 
 	if err != nil {
 		t.Error(err)
 	}
 
-	defer file.Close()
-
-	tokens := formatter.Tokenize(file)
-
-	if !reflect.DeepEqual(tokens, &expected_tokens) {
-		formatter.PrintTokens(&expected_tokens)
+	if !reflect.DeepEqual(tokens, expected_tokens) {
+		formatter.PrintTokens(expected_tokens)
 		fmt.Println()
 		formatter.PrintTokens(tokens)
 
@@ -85,18 +80,14 @@ func TestLabelsAndInstructions(t *testing.T) {
 
 	t.Log("Testing examples/label_and_instructions.asm ...")
 
-	file, err := os.Open("../examples/label_and_instructions.asm")
+	tokens, err := formatter.Tokenize("../examples/label_and_instructions.asm")
 
 	if err != nil {
 		t.Error(err)
 	}
 
-	defer file.Close()
-
-	tokens := formatter.Tokenize(file)
-
-	if !reflect.DeepEqual(tokens, &expected_tokens) {
-		formatter.PrintTokens(&expected_tokens)
+	if !reflect.DeepEqual(tokens, expected_tokens) {
+		formatter.PrintTokens(expected_tokens)
 		fmt.Println()
 		formatter.PrintTokens(tokens)
 
@@ -106,13 +97,13 @@ func TestLabelsAndInstructions(t *testing.T) {
 
 func TestWithComments(t *testing.T) {
 	expected_tokens := []formatter.Token{
-		{TkType: formatter.TkCommentNewLine, TkValue: "; Start label"},
+		{TkType: formatter.TkCommentNewLine, TkValue: "Start label"},
 
 		{TkType: formatter.TkLabel, TkValue: "_start"},
 
 		{TkType: formatter.TkInstruction, TkValue: "extern"},
 		{TkType: formatter.TkOperand, TkValue: "page_directory"},
-		{TkType: formatter.TkCommentSameLine, TkValue: "; An extern variable"},
+		{TkType: formatter.TkCommentSameLine, TkValue: "An extern variable"},
 
 		{TkType: formatter.TkInstruction, TkValue: "mov"},
 		{TkType: formatter.TkOperand, TkValue: "eax"},
@@ -144,18 +135,14 @@ func TestWithComments(t *testing.T) {
 
 	t.Log("Testing examples/with_comments.asm ...")
 
-	file, err := os.Open("../examples/with_comments.asm")
+	tokens, err := formatter.Tokenize("../examples/with_comments.asm")
 
 	if err != nil {
 		t.Error(err)
 	}
 
-	defer file.Close()
-
-	tokens := formatter.Tokenize(file)
-
-	if !reflect.DeepEqual(tokens, &expected_tokens) {
-		formatter.PrintTokens(&expected_tokens)
+	if !reflect.DeepEqual(tokens, expected_tokens) {
+		formatter.PrintTokens(expected_tokens)
 		fmt.Println()
 		formatter.PrintTokens(tokens)
 
