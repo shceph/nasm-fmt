@@ -13,7 +13,7 @@ type FormatOpts = struct {
 var DefaultFormatOpts FormatOpts = FormatOpts{
 	NoTab:            true,
 	TabWidth:         4,
-	OperandAlignDist: 12,
+	OperandAlignDist: 10,
 }
 
 func Format(filePath string, opts FormatOpts) (string, error) {
@@ -96,7 +96,7 @@ func generateFromTokens(tokens []Token, opts FormatOpts) string {
 			bufAddStr(&buf, tk.TkValue)
 			instructionLen = len(tk.TkValue)
 		case TkOperand:
-			if instructionLen != 0 {
+			if instructionLen != 0 && indentLevel != 0 {
 				bufAddWhitespaces(&buf, opts.OperandAlignDist-instructionLen)
 				instructionLen = 0
 			}
@@ -119,6 +119,8 @@ func generateFromTokens(tokens []Token, opts FormatOpts) string {
 			bufAddStr(&buf, "; ", tk.TkValue)
 		case TkEmptyLine:
 			bufAddChr(&buf, '\n')
+		case TkPushIndentLevel:
+			indentLevel = int(tk.TkValue[0] - '0')
 		}
 	}
 
