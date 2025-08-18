@@ -103,7 +103,7 @@ func TestWithComments(t *testing.T) {
 
 		{TkType: formatter.TkInstruction, TkValue: "extern"},
 		{TkType: formatter.TkOperand, TkValue: "page_directory"},
-		{TkType: formatter.TkCommentSameLine, TkValue: "An extern variable"},
+		{TkType: formatter.TkCommentInline, TkValue: "An extern variable"},
 
 		{TkType: formatter.TkInstruction, TkValue: "mov"},
 		{TkType: formatter.TkOperand, TkValue: "eax"},

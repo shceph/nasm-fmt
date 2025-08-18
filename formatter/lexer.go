@@ -10,17 +10,21 @@ import (
 type TokenType int
 
 const (
-	TkLabel TokenType = iota
+	TkNoType TokenType = iota
+	TkLabel
 	TkBracketedDirective
 	TkInstruction
 	TkOperand
 	TkComma
 	TkColon
-	TkCommentSameLine
+	TkPlus
+	TkMinus
+	TkAsterisk
+	TkSlash
+	TkCommentInline
 	TkCommentNewLine
 	TkEmptyLine
 	TkPushIndentLevel
-	TkNoType
 )
 
 type Token = struct {
@@ -42,7 +46,15 @@ func TokenTypeToStr(tkType TokenType) string {
 		return "TkComma"
 	case TkColon:
 		return "TkColon"
-	case TkCommentSameLine:
+	case TkPlus:
+		return "TkPlus"
+	case TkMinus:
+		return "TkMinus"
+	case TkAsterisk:
+		return "TkAsterisk"
+	case TkSlash:
+		return "TkSlash"
+	case TkCommentInline:
 		return "TkCommentSameLine"
 	case TkCommentNewLine:
 		return "TkCommentNewLine"
@@ -50,9 +62,11 @@ func TokenTypeToStr(tkType TokenType) string {
 		return "TkEmptyLine"
 	case TkPushIndentLevel:
 		return "TkPushIndentLevel"
+	case TkNoType:
+		return "=====TkNoType====="
 	}
 
-	return "type not added"
+	return "=====ValueNotInEnum======"
 }
 
 func PrintTokens(tokens []Token) {
@@ -115,9 +129,14 @@ func handleComment(tokens *[]Token, commentType TokenType, line string, index in
 func handleBracketedDirective(tokens *[]Token, line string, index int) int {
 	buf := make([]byte, 0, len(line))
 
-	i := 0
-	for i = index + 1; line[i] != ']' && i < len(line); i++ {
+	i := index
+	for ; i < len(line); i++ {
 		buf = append(buf, line[i])
+
+		if line[i] == ']' {
+			i++
+			break
+		}
 	}
 
 	addToken(tokens, TkBracketedDirective, string(buf))
@@ -135,42 +154,58 @@ var (
 		',': true,
 		':': true,
 	}
+
+	arithOperators = [256]TokenType{
+		'+': TkPlus,
+		'-': TkMinus,
+		'*': TkAsterisk,
+		'/': TkSlash,
+	}
 )
 
 func isWhitespaceChar(ch byte) bool {
-	return int(ch) < len(whitespaceChars) && whitespaceChars[ch]
+	return whitespaceChars[ch]
 }
 
 func isSpecialChar(ch byte) bool {
-	return int(ch) < len(specialChars) && specialChars[ch]
+	return specialChars[ch]
+}
+
+func isArithOperator(ch byte) bool {
+	return arithOperators[ch] != TkNoType
+}
+
+func operatorToToken(ch byte) Token {
+	return Token{TkType: arithOperators[ch], TkValue: string(ch)}
 }
 
 func flushPendingToken(
 	tokens *[]Token,
 	bufValue *[]byte,
 	pendingType *TokenType,
-	line string,
-	instructionFound, addComma *bool) {
+	instructionFound *bool,
+	line string) {
 
-	if len(*bufValue) != 0 {
-		if !*instructionFound && *pendingType == TkOperand {
-			*pendingType = TkInstruction
-			*instructionFound = true
+	if len(*bufValue) == 0 {
+		*pendingType = TkNoType
+		return
+	} else if *pendingType == TkNoType {
+		*pendingType = TkOperand
+	}
 
-			// If first character is not whitespace, that means that the
-			// instruction is at the beginning of the line, which means that it
-			// should not be indented like instructions usually are under labels
-			if !isWhitespaceChar(line[0]) {
-				addToken(tokens, TkPushIndentLevel, "0")
-			}
+	if !*instructionFound && *pendingType == TkOperand {
+		*pendingType = TkInstruction
+		*instructionFound = true
+
+		// If first character is not whitespace, that means that the
+		// instruction is at the beginning of the line, which means that it
+		// should not be indented like instructions usually are under labels
+		if !isWhitespaceChar(line[0]) {
+			addToken(tokens, TkPushIndentLevel, "0")
 		}
-		addToken(tokens, *pendingType, string(*bufValue))
 	}
 
-	if *addComma {
-		addToken(tokens, TkComma, ",")
-		*addComma = false
-	}
+	addToken(tokens, *pendingType, string(*bufValue))
 
 	*bufValue = (*bufValue)[:0]
 	*pendingType = TkNoType
@@ -185,7 +220,6 @@ func tokenizeLine(tokens *[]Token, line string) {
 	bufValue := make([]byte, 0, len(line))
 
 	instructionFound := false
-	addComma := false
 	pendingType := TkNoType
 
 	for i := 0; i < len(line); i++ {
@@ -193,12 +227,12 @@ func tokenizeLine(tokens *[]Token, line string) {
 
 		switch {
 		case ch == ';':
-			commentType := TkCommentSameLine
+			commentType := TkCommentInline
 			if len(bufValue) == 0 {
 				commentType = TkCommentNewLine
 			}
 
-			flushPendingToken(tokens, &bufValue, &pendingType, line, &instructionFound, &addComma)
+			flushPendingToken(tokens, &bufValue, &pendingType, &instructionFound, line)
 			handleComment(tokens, commentType, line, i)
 			return
 		case ch == '[' && !instructionFound && len(bufValue) == 0:
@@ -208,23 +242,24 @@ func tokenizeLine(tokens *[]Token, line string) {
 				pendingType = TkOperand
 			}
 		case isSpecialChar(ch):
-			if len(bufValue) != 0 && pendingType == TkNoType {
-				pendingType = TkOperand
-			}
-
 			switch ch {
 			case ':':
 				if !instructionFound {
 					pendingType = TkLabel
 					break
 				}
-				flushPendingToken(tokens, &bufValue, &pendingType, line, &instructionFound, &addComma)
+				flushPendingToken(tokens, &bufValue, &pendingType, &instructionFound, line)
 				addToken(tokens, TkColon, ":")
 			case ',':
-				addComma = true
+				flushPendingToken(tokens, &bufValue, &pendingType, &instructionFound, line)
+				addToken(tokens, TkComma, ",")
 			}
+		case isArithOperator(ch):
+			flushPendingToken(tokens, &bufValue, &pendingType, &instructionFound, line)
+			token := operatorToToken(ch)
+			addToken(tokens, token.TkType, token.TkValue)
 		case pendingType != TkNoType && len(bufValue) != 0:
-			flushPendingToken(tokens, &bufValue, &pendingType, line, &instructionFound, &addComma)
+			flushPendingToken(tokens, &bufValue, &pendingType, &instructionFound, line)
 			fallthrough
 		default:
 			bufValue = append(bufValue, ch)
@@ -241,8 +276,5 @@ func tokenizeLine(tokens *[]Token, line string) {
 		}
 
 		addToken(tokens, pendingType, string(bufValue))
-		if addComma {
-			addToken(tokens, TkComma, ",")
-		}
 	}
 }

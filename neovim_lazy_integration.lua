@@ -9,7 +9,7 @@ return {
 			local FORMATTING = methods.internal.FORMATTING
 
 			local nasm_fmt   = helpers.make_builtin({
-				name = "nasmfmt",
+				name = "nasm_fmt",
 				meta = { description = "NASM formatter" },
 				method = FORMATTING,
 				filetypes = { "asm", "nasm" },

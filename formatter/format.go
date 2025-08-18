@@ -2,18 +2,21 @@ package formatter
 
 import (
 	"os"
+	"strings"
 )
 
 type FormatOpts = struct {
-	NoTab            bool
-	TabWidth         int
-	OperandAlignDist int
+	NoTab                    bool
+	AlignConsecutiveComments bool
+	TabWidth                 int
+	OperandAlignDist         int
 }
 
 var DefaultFormatOpts FormatOpts = FormatOpts{
-	NoTab:            true,
-	TabWidth:         4,
-	OperandAlignDist: 10,
+	NoTab:                    true,
+	AlignConsecutiveComments: true,
+	TabWidth:                 4,
+	OperandAlignDist:         10,
 }
 
 func Format(filePath string, opts FormatOpts) (string, error) {
@@ -36,8 +39,12 @@ func Format(filePath string, opts FormatOpts) (string, error) {
 	}()
 
 	output := generateFromTokens(tokens, DefaultFormatOpts)
-	_, err = file.WriteString(output)
 
+	if opts.AlignConsecutiveComments {
+		output = alignInlineComments(output)
+	}
+
+	_, err = file.WriteString(output)
 	return output, err
 }
 
@@ -88,7 +95,7 @@ func generateFromTokens(tokens []Token, opts FormatOpts) string {
 			bufAddStr(&buf, "\n", tk.TkValue, ":")
 			indentLevel = 1
 		case TkBracketedDirective:
-			bufAddStr(&buf, "\n[", tk.TkValue, "]")
+			bufAddStr(&buf, "\n", tk.TkValue)
 			indentLevel = 0
 		case TkInstruction:
 			bufAddChr(&buf, '\n')
@@ -111,7 +118,15 @@ func generateFromTokens(tokens []Token, opts FormatOpts) string {
 		case TkColon:
 			bufAddChr(&buf, ':')
 			dontAddSpaceInFrontOfOperand = true
-		case TkCommentSameLine:
+		case TkPlus:
+			bufAddStr(&buf, " +")
+		case TkMinus:
+			bufAddStr(&buf, " -")
+		case TkAsterisk:
+			bufAddStr(&buf, " *")
+		case TkSlash:
+			bufAddStr(&buf, " /")
+		case TkCommentInline:
 			bufAddStr(&buf, " ; ", tk.TkValue)
 		case TkCommentNewLine:
 			bufAddChr(&buf, '\n')
@@ -131,4 +146,63 @@ func generateFromTokens(tokens []Token, opts FormatOpts) string {
 	}
 
 	return string(buf[startIndex:])
+}
+
+func alignInlineComments(fileContents string) string {
+	lines := strings.Split(fileContents, "\n")
+
+	maxLineLenBeforeComment := 0
+	consecCommentsStartLineIndex := -1
+	commentFound := false
+	isCommentInline := false
+
+	for i, line := range lines {
+		commentFound = false
+		isCommentInline = false
+
+		for j, ch := range line {
+			if !isWhitespaceChar(byte(ch)) && ch != ';' {
+				isCommentInline = true
+			}
+
+			if ch == ';' {
+				// Don't align non inline comments
+				if !isCommentInline {
+					break
+				}
+
+				commentFound = true
+
+				if consecCommentsStartLineIndex == -1 {
+					consecCommentsStartLineIndex = i
+				}
+
+				if j > maxLineLenBeforeComment {
+					maxLineLenBeforeComment = j
+				}
+
+				break
+			}
+		}
+
+		if (!commentFound && consecCommentsStartLineIndex != -1) ||
+			(commentFound && i == len(lines)-1) {
+
+			for k := consecCommentsStartLineIndex; k < i; k++ {
+				lines[k] = alignCommentOnThisLine(lines[k], maxLineLenBeforeComment+1)
+			}
+			consecCommentsStartLineIndex = -1
+			maxLineLenBeforeComment = 0
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func alignCommentOnThisLine(line string, alignOffset int) string {
+	parts := strings.SplitN(line, ";", 2)
+	code := parts[0]
+	comment := parts[1]
+
+	return code + strings.Repeat(" ", alignOffset-len(code)) + ";" + comment
 }

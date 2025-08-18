@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -13,20 +12,9 @@ func main() {
 		log.Fatal("No file provided. Aborting...")
 	}
 
-	tokens, err := formatter.Tokenize(os.Args[1])
+	_, err := formatter.Format(os.Args[1], formatter.DefaultFormatOpts)
 
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	formatter.PrintTokens(tokens)
-	fmt.Println()
-
-	output, err := formatter.Format(os.Args[1], formatter.DefaultFormatOpts)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(output)
 }
